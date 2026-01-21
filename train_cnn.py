@@ -18,7 +18,7 @@ from sklearn.metrics import (
     confusion_matrix, roc_auc_score, balanced_accuracy_score
 )
 
-# TensorFlow/Keras imports
+from ecg_mitbih import load_dataset, augment_ecg_signal# TensorFlow/Keras imports
 try:
     import tensorflow as tf
     from tensorflow import keras
@@ -59,6 +59,8 @@ def parse_args():
                    help="Model architecture to use")
     ap.add_argument("--use_smote", action="store_true",
                    help="Use SMOTE for balancing training data")
+    ap.add_argument("--use_augmentation", action="store_true",
+                   help="Use ECG data augmentation during training")
     ap.add_argument("--cross_validate", action="store_true",
                    help="Perform patient-wise cross-validation")
     ap.add_argument("--output", type=str, default="results_deep_learning.json",
@@ -498,9 +500,20 @@ def cross_validate_deep_learning(X, y, groups, args):
         
         # ✅ CHANGED: Binary crossentropy instead of categorical
         model.compile(
-            optimizer=keras.optimizers.Adam(learning_rate=args.learning_rate),
-            loss='binary_crossentropy',  # Was: 'categorical_crossentropy'
-            metrics=['accuracy', keras.metrics.AUC(name='AUC')]
+            optimizer=keras.optimizers.Adam(
+                learning_rate=args.learning_rate,
+                beta_1=0.9,
+                beta_2=0.999,
+                epsilon=1e-7,  # Numerical stability
+                clipnorm=1.0   # ✅ NEW: Gradient clipping
+            ),
+            loss='binary_crossentropy',
+            metrics=[
+                'accuracy',
+                keras.metrics.AUC(name='AUC'),
+                keras.metrics.Precision(name='precision'),
+                keras.metrics.Recall(name='recall')
+            ]
         )
         
         # Class weights
@@ -508,23 +521,48 @@ def cross_validate_deep_learning(X, y, groups, args):
         
         # Callbacks
         callbacks = [
+            # ✅ NEW: Save best model for each fold
+            keras.callbacks.ModelCheckpoint(
+                filepath=f'checkpoints/model_fold_{fold}_{{epoch:02d}}_{{val_AUC:.4f}}.h5',
+                monitor='val_AUC',
+                save_best_only=True,
+                mode='max',
+                verbose=1
+            ),
+            
             EarlyStopping(
                 monitor='val_AUC',
                 patience=20,
                 restore_best_weights=True,
                 mode='max',
-                verbose=0
+                verbose=1
             ),
+            
             ReduceLROnPlateau(
                 monitor='val_AUC',
                 factor=0.5,
                 patience=10,
                 mode='max',
-                min_lr=1e-6,
-                verbose=0
+                min_lr=1e-7,
+                verbose=1
             ),
+            
+            # ✅ NEW: TensorBoard logging
+            keras.callbacks.TensorBoard(
+                log_dir=f'logs/fold_{fold}',
+                histogram_freq=1
+            ),
+            
             EnhancedProgressCallback(args.epochs)
         ]
+        
+        # ✅ NEW: Apply data augmentation if requested
+        if args.use_augmentation:
+            print(f"      Augmenting training data...")
+            X_tr_aug = np.array([augment_ecg_signal(x) for x in X_tr_split])
+            X_tr_split = np.concatenate([X_tr_split, X_tr_aug])
+            y_tr_split = np.concatenate([y_tr_split, y_tr_split])
+            print(f"      Training set expanded: {X_tr_split.shape[0]} samples")
         
         # Train
         history = model.fit(
