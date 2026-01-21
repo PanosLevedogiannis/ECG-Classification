@@ -230,7 +230,7 @@ def build_cnn_lstm(input_shape: Tuple[int, int], l2_reg: float = 0.001):
 def get_model(model_name: str, input_shape: Tuple[int, int], l2_reg: float = 0.001):
     """Factory function to create models by name."""
     models = {
-        'cnn': build_resnet_1d,        # ✅ UPDATED: Now uses ResNet with skip connections
+        'cnn': build_1d_cnn,
         'lstm': build_lstm,
         'fast_lstm': build_fast_lstm,
         'cnn_lstm': build_cnn_lstm
@@ -240,126 +240,6 @@ def get_model(model_name: str, input_shape: Tuple[int, int], l2_reg: float = 0.0
         raise ValueError(f"Unknown model: {model_name}")
     
     return models[model_name](input_shape, l2_reg)
-
-
-# ============================================================================
-# FOCAL LOSS - Focuses on Hard Examples
-# ============================================================================
-
-def binary_focal_loss(gamma=2., alpha=0.25):
-    """
-    Binary form of focal loss.
-    - gamma: Exponent of the modulating factor (1 - p_t). Higher = more focus on hard examples
-    - alpha: Weighting factor in [0, 1] to balance positive vs negative examples
-    
-    Standard crossentropy treats all errors equally.
-    Focal loss down-weights easy examples and focuses on hard negatives.
-    """
-    def focal_loss_fixed(y_true, y_pred):
-        pt_1 = tf.where(tf.equal(y_true, 1), y_pred, tf.ones_like(y_pred))
-        pt_0 = tf.where(tf.equal(y_true, 0), y_pred, tf.zeros_like(y_pred))
-        
-        epsilon = keras.backend.epsilon()
-        # Clip to prevent NaN/Inf
-        pt_1 = tf.clip_by_value(pt_1, epsilon, 1. - epsilon)
-        pt_0 = tf.clip_by_value(pt_0, epsilon, 1. - epsilon)
-
-        return -tf.reduce_mean(
-            alpha * tf.pow(1. - pt_1, gamma) * tf.math.log(pt_1) +
-            (1 - alpha) * tf.pow(pt_0, gamma) * tf.math.log(1. - pt_0)
-        )
-    return focal_loss_fixed
-
-
-# ============================================================================
-# RESIDUAL BLOCKS - Skip Connections for Deeper Networks
-# ============================================================================
-
-def residual_block(x, filters, kernel_size=5, stride=1):
-    """
-    A single residual block with skip connection.
-    
-    Skip connections allow gradients to flow directly through the network,
-    preventing vanishing gradient problem and allowing deeper architectures.
-    """
-    shortcut = x
-    
-    # Main path: Conv → BatchNorm → ReLU → Dropout → Conv → BatchNorm
-    x = layers.Conv1D(filters, kernel_size, strides=stride, padding='same')(x)
-    x = layers.BatchNormalization()(x)
-    x = layers.Activation('relu')(x)
-    x = layers.Dropout(0.2)(x)
-
-    x = layers.Conv1D(filters, kernel_size, strides=1, padding='same')(x)
-    x = layers.BatchNormalization()(x)
-
-    # Adjust shortcut if dimensions change (stride or filters)
-    if stride != 1 or shortcut.shape[-1] != filters:
-        shortcut = layers.Conv1D(filters, 1, strides=stride, padding='same')(shortcut)
-        shortcut = layers.BatchNormalization()(shortcut)
-
-    # Add skip connection: combines main path with shortcut
-    x = layers.Add()([x, shortcut])
-    x = layers.Activation('relu')(x)
-    
-    return x
-
-
-def build_resnet_1d(input_shape: Tuple[int, int], l2_reg: float = 0.0001):
-    """
-    State-of-the-art ResNet architecture for ECG classification.
-    
-    Architecture:
-    - Initial Conv1D layer (32 filters)
-    - 6 residual blocks with progressive downsampling
-    - GlobalAveragePooling for dimensionality reduction
-    - Dense classification head
-    - Sigmoid output for binary classification
-    
-    Key advantages:
-    ✅ Skip connections prevent vanishing gradient
-    ✅ Can go much deeper without degradation
-    ✅ Better feature extraction for subtle ECG morphology changes
-    """
-    inputs = layers.Input(shape=input_shape)
-    
-    # Initial Conv layer
-    x = layers.Conv1D(32, 7, padding='same', strides=1)(inputs)
-    x = layers.BatchNormalization()(x)
-    x = layers.Activation('relu')(x)
-    x = layers.Dropout(0.1)(x)
-    
-    # Residual Blocks (Deep Feature Extraction with Progressive Downsampling)
-    # Block 1: 32 filters, stride=1
-    x = residual_block(x, 32, kernel_size=5, stride=1)
-    x = residual_block(x, 32, kernel_size=5, stride=1)
-    
-    # Block 2: 64 filters, stride=2 (downsample by 2x)
-    x = residual_block(x, 64, kernel_size=5, stride=2)
-    x = residual_block(x, 64, kernel_size=5, stride=1)
-    
-    # Block 3: 128 filters, stride=2 (downsample by 2x)
-    x = residual_block(x, 128, kernel_size=3, stride=2)
-    x = residual_block(x, 128, kernel_size=3, stride=1)
-    
-    # Block 4: 256 filters, stride=2 (downsample by 2x)
-    x = residual_block(x, 256, kernel_size=3, stride=2)
-    x = residual_block(x, 256, kernel_size=3, stride=1)
-    
-    # Global pooling to reduce to single value per channel
-    x = layers.GlobalAveragePooling1D()(x)
-    x = layers.Dropout(0.5)(x)
-    
-    # Classification head
-    x = layers.Dense(128, activation='relu')(x)
-    x = layers.BatchNormalization()(x)
-    x = layers.Dropout(0.5)(x)
-    
-    # Binary output
-    outputs = layers.Dense(1, activation='sigmoid')(x)
-    
-    model = keras.Model(inputs, outputs, name='ResNet_1D_ECG')
-    return model
 
 
 # ============================================================================
@@ -616,20 +496,18 @@ def cross_validate_deep_learning(X, y, groups, args):
         print(f"\n  Model architecture: {args.model.upper()}")
         print(f"    Total parameters: {model.count_params():,}")
         print(f"    Output: 1 neuron with sigmoid activation")
+        print(f"    Loss: Binary Crossentropy")
         
-        # ✅ UPDATED: Use AdamW optimizer + Focal Loss
-        optimizer = keras.optimizers.AdamW(
-            learning_rate=args.learning_rate,
-            weight_decay=1e-4,  # ✅ Weight decay for regularization
-            beta_1=0.9,
-            beta_2=0.999,
-            epsilon=1e-7,
-            clipnorm=1.0
-        )
-        
+        # ✅ CHANGED: Binary crossentropy instead of categorical
         model.compile(
-            optimizer=optimizer,
-            loss=binary_focal_loss(gamma=2.0, alpha=0.25),  # ✅ Focal Loss focuses on hard examples
+            optimizer=keras.optimizers.Adam(
+                learning_rate=args.learning_rate,
+                beta_1=0.9,
+                beta_2=0.999,
+                epsilon=1e-7,  # Numerical stability
+                clipnorm=1.0   # ✅ NEW: Gradient clipping
+            ),
+            loss='binary_crossentropy',
             metrics=[
                 'accuracy',
                 keras.metrics.AUC(name='AUC'),
@@ -637,9 +515,6 @@ def cross_validate_deep_learning(X, y, groups, args):
                 keras.metrics.Recall(name='recall')
             ]
         )
-        
-        print(f"    Optimizer: AdamW (weight_decay=1e-4)")
-        print(f"    Loss: Focal Loss (γ=2.0, α=0.25)")
         
         # Class weights
         class_weights = None if args.use_smote else compute_class_weights(y_tr)
