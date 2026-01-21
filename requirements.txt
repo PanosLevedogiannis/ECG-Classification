@@ -10,9 +10,8 @@ PyWavelets>=1.3.0
 scikit-learn>=1.0.0
 imbalanced-learn>=0.9.0
 
-# Deep Learning
-tensorflow>=2.8.0
-# For Apple Silicon Macs, use: tensorflow-macos>=2.8.0
+# Deep Learning (macOS-optimized)
+tensorflow-macos>=2.8.0  # ✅ Optimized for macOS (M1/M2/Intel)
 
 # Visualization
 matplotlib>=3.5.0
