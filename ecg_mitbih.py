@@ -58,6 +58,39 @@ def bandpass_filter(
     return filtfilt(b, a, sig, axis=0)
 
 
+def augment_ecg_signal(signal: np.ndarray, noise_level: float = 0.01) -> np.ndarray:
+    """
+    Apply realistic ECG augmentation for training.
+    
+    Augmentation techniques:
+    - Add Gaussian noise (simulate sensor noise)
+    - Random amplitude scaling (±10%)
+    - Random time shift (±5 samples)
+    
+    Args:
+        signal: Input ECG signal (1D array)
+        noise_level: Standard deviation of Gaussian noise to add
+    
+    Returns:
+        Augmented signal with same shape as input
+    """
+    augmented = signal.copy().astype(np.float32)
+    
+    # 1. Add Gaussian noise (simulate sensor noise)
+    noise = np.random.normal(0, noise_level, signal.shape)
+    augmented += noise
+    
+    # 2. Random amplitude scaling (0.9 to 1.1)
+    scale = np.random.uniform(0.9, 1.1)
+    augmented *= scale
+    
+    # 3. Random time shift (±5 samples)
+    shift = np.random.randint(-5, 6)
+    augmented = np.roll(augmented, shift, axis=0)
+    
+    return augmented
+
+
 def load_record(data_root: str | Path, rec_name: str):
     """Load a single ECG record with annotations."""
     base = Path(data_root) / rec_name
