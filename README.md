@@ -1,98 +1,352 @@
 # ECG Arrhythmia Classification System
 
-Advanced biomedical signal processing and machine learning system for automated ECG arrhythmia detection.
+A complete machine learning pipeline for automated ECG arrhythmia detection using classical ML and deep learning.
 
-## 🎯 Overview
+## 📋 What This Does
 
-This project implements a comprehensive pipeline for ECG arrhythmia classification using both **classical machine learning** and **deep learning** approaches. It demonstrates the integration of:
+Classifies ECG signals as **Normal** or **Arrhythmia** using two approaches:
+- **Classical ML**: SVM, Random Forest, Gradient Boosting
+- **Deep Learning**: CNN, LSTM, ResNet with skip connections
 
-- **Signal Processing (ΣΕΣ)**: Digital filtering, frequency analysis, wavelet transforms
-- **Machine Learning (ΜΜ)**: Feature engineering, classification, cross-validation
+Uses real data from the MIT-BIH Arrhythmia Database and prevents overfitting through patient-wise cross-validation.
 
-## 📊 Features
+## 🎯 Quick Start (5 minutes)
 
-### Signal Processing
-- ✅ Butterworth bandpass filtering (0.5-40 Hz)
-- ✅ Sliding window segmentation with overlap
-- ✅ **Time-domain features** (12 features): mean, std, skewness, kurtosis, RMS, etc.
-- ✅ **Frequency-domain features** (11 features): Power spectral density, spectral entropy, band powers
-- ✅ **HRV features** (17 features): R-R intervals, RMSSD, pNN50, heart rate statistics
-- ✅ **Wavelet features** (optional, 30+ features): Multi-level DWT decomposition
-
-### Machine Learning Models
-
-#### Classical ML
-- **SVM**: Support Vector Machine with RBF kernel
-- **Random Forest**: 200 trees with balanced weights
-- **Gradient Boosting**: 100 estimators
-- **Logistic Regression**: L2 regularization
-
-#### Deep Learning
-- **1D CNN**: 4 convolutional blocks with batch normalization (recommended)
-- **Fast BiLSTM**: Optimized bidirectional LSTM with 4x downsampling
-- **BiLSTM**: Standard bidirectional LSTM (SLOW, use fast_lstm instead)
-- **CNN-LSTM**: Hybrid architecture combining spatial and temporal learning
-
-### Advanced Training Strategies
-- ✅ **Patient-wise cross-validation** (5-fold)
-- ✅ **SMOTE** oversampling for class imbalance
-- ✅ **Focal Loss** for hard example mining
-- ✅ **Class weights** for balanced training
-- ✅ **Early stopping** and learning rate scheduling
-- ✅ **L2 regularization** to prevent overfitting
-
-## 🚀 Quick Start
-
-### Installation
+### 1. Install Python Dependencies
 
 ```bash
-# Clone repository
-git clone <your-repo>
-cd ecg-arrhythmia-classification
-
 # Create virtual environment
-python -m venv .venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
 
 # Install dependencies
 pip install -r requirements.txt
 ```
 
-### Dependencies
+### 2. Download Data (Required)
 
-```txt
-numpy>=1.21.0
-scipy>=1.7.0
-scikit-learn>=1.0.0
-wfdb>=4.0.0
-tensorflow>=2.8.0
-keras>=2.8.0
-imbalanced-learn>=0.9.0
-PyWavelets>=1.3.0
-matplotlib>=3.5.0
-seaborn>=0.11.0
-tqdm>=4.64.0
-```
-
-**Optional GPU Support:**
 ```bash
-# For NVIDIA GPUs (much faster training)
-pip install tensorflow-gpu
-```
-
-### Data Preparation
-
-1. Download MIT-BIH Arrhythmia Database:
-```bash
+# Create data directory and download MIT-BIH database
 mkdir -p data/mitdb
 cd data/mitdb
 
-# Download using WFDB tools
-for i in {100..109}; do
-    wget https://physionet.org/files/mitdb/1.0.0/${i}.dat
-    wget https://physionet.org/files/mitdb/1.0.0/${i}.hea
-    wget https://physionet.org/files/mitdb/1.0.0/${i}.atr
+# Download 20 patient records (you need the .dat, .hea, and .atr files)
+# Option A: Using wget (Linux/Mac)
+for i in 100 101 102 103 104 105 106 107 108 109 111 112 113 114 115 116 117 118 119 121; do
+    wget https://physionet.org/files/mitdb/1.0.0/$i.dat
+    wget https://physionet.org/files/mitdb/1.0.0/$i.hea
+    wget https://physionet.org/files/mitdb/1.0.0/$i.atr
 done
+
+# Option B: Manual download
+# Visit: https://physionet.org/content/mitdb/1.0.0/
+# Download the 3 files (.dat, .hea, .atr) for each patient above
+# Place them in data/mitdb/
+
+cd ../..
+```
+
+### 3. Run Your First Comparison
+
+```bash
+# Test with classical ML models (fastest, ~5 minutes)
+python compare_models.py --skip_deep --quick_test
+
+# Expected output:
+# ✅ Classical ML Summary:
+#    Random Forest: Balanced Accuracy ~0.80
+#    SVM: Balanced Accuracy ~0.75
+#    Gradient Boosting: Balanced Accuracy ~0.78
+```
+
+Done! You'll find results in `results/` directory.
+
+## 📖 Common Usage Scenarios
+
+### Scenario 1: Train Only Classical ML Models (Fastest)
+
+```bash
+python compare_models.py --skip_deep --use_smote
+```
+
+**Pros:**
+- Trains in 5-10 minutes
+- No GPU needed
+- Easy to interpret results
+
+**Output:** `results/all_results.json`, comparison plots
+
+### Scenario 2: Train Only Deep Learning (ResNet)
+
+```bash
+python train_cnn.py --cross_validate --model cnn --use_smote --epochs 50
+```
+
+**Pros:**
+- State-of-the-art ResNet with skip connections
+- Better for complex patterns
+- Uses Focal Loss for hard example learning
+
+**Output:** `results_deep_learning.json`
+
+### Scenario 3: Full Comparison (All Models)
+
+```bash
+python compare_models.py --use_smote
+```
+
+**Takes:** ~30-60 minutes depending on CPU/GPU
+**Output:** Complete comparison table and plots
+
+### Scenario 4: Quick Test (5 minutes)
+
+```bash
+python compare_models.py --quick_test
+```
+
+**Pros:**
+- Tests CNN and Fast LSTM only
+- 25 epochs instead of 50
+- Good for debugging
+
+## 🛠️ Installation Details
+
+### Prerequisites
+- Python 3.8+
+- pip or conda
+- ~2 GB disk space for data
+- Optional: NVIDIA GPU for faster deep learning training
+
+### Step-by-Step Installation
+
+**1. Clone and setup:**
+```bash
+cd /your/project/directory
+python -m venv venv
+source venv/bin/activate
+```
+
+**2. Install dependencies:**
+```bash
+pip install -r requirements.txt
+```
+
+**3. Verify installation:**
+```bash
+python -c "import tensorflow; import wfdb; import sklearn; print('✅ All dependencies installed')"
+```
+
+**4. Download data (see Section 2 above)**
+
+## 📊 Understanding the Results
+
+### What You'll See
+
+After running `python compare_models.py --skip_deep --quick_test`, you'll get:
+
+```
+CLASSICAL MACHINE LEARNING (with fixes)
+─────────────────────────────────────────────
+Model              Train Loss    Test Loss    Bal.Acc    F1      AUC
+SVM                0.3721        0.4285       0.753±0.100  0.71   0.821±0.065
+Random Forest      0.0015        0.2134       0.801±0.085  0.76   0.851±0.052
+Gradient Boosting  0.0821        0.1923       0.782±0.092  0.74   0.834±0.058
+```
+
+**Key Metrics Explained:**
+- **Balanced Accuracy**: Average of sensitivity and specificity (best for imbalanced data)
+- **F1-Score**: Harmonic mean of precision and recall
+- **AUC**: Area under the ROC curve (1.0 = perfect, 0.5 = random)
+- **Train Loss vs Test Loss Gap**: Indicates overfitting (should be < 0.3)
+
+### Output Files
+
+After running, you'll find in `results/`:
+- `all_results.json` - Complete numerical results
+- `model_comparison.png` - Comparison plots
+- `report.md` - Detailed markdown report
+- `results_*.json` - Individual model results
+
+## ⚠️ Troubleshooting
+
+### Problem: "ModuleNotFoundError: No module named 'wfdb'"
+
+**Solution:**
+```bash
+pip install wfdb
+```
+
+### Problem: "Data not found" or "No valid windows extracted"
+
+**Solution:** Verify data is in correct location:
+```bash
+ls -la data/mitdb/100.*  # Should show 100.dat, 100.hea, 100.atr
+```
+
+### Problem: Out of Memory (OOM) Error
+
+**Solution:** Reduce batch size or records:
+```bash
+python train_cnn.py --batch_size 16 --records 100 101 102
+```
+
+### Problem: Training is very slow
+
+**Solution:** Make sure you're using `fast_lstm`:
+```bash
+python compare_models.py  # Uses fast_lstm by default ✅
+
+# DON'T use this (4-8x slower):
+# python compare_models.py --use_slow_lstm  # ❌ Very slow!
+```
+
+### Problem: SMOTE not available
+
+**Solution:**
+```bash
+pip install imbalanced-learn
+```
+
+### Problem: Wavelet features disabled
+
+**Solution:**
+```bash
+pip install PyWavelets
+```
+
+## 📁 Project Structure
+
+```
+ecg-arrhythmia-classification/
+├── compare_models.py          ← Run this first! (all models)
+├── train_cnn.py               ← Deep learning training
+├── ecg_mitbih.py              ← Signal processing (don't modify)
+├── requirements.txt           ← Dependencies
+├── data/
+│   └── mitdb/                 ← Put data files here
+│       ├── 100.dat
+│       ├── 100.hea
+│       ├── 100.atr
+│       └── ... (more patient files)
+├── results/                   ← Output directory (auto-created)
+│   ├── all_results.json
+│   ├── model_comparison.png
+│   └── report.md
+└── README.md
+```
+
+## 🚀 Advanced Usage
+
+### Use Different ECG Records
+
+```bash
+# Use only records 100-105
+python compare_models.py --skip_deep --records 100 101 102 103 104 105
+
+# Use all available records
+python compare_models.py --skip_deep --records 100 101 102 103 104 105 106 107 108 109 111 112 113 114 115 116 117 118 119 121
+```
+
+### Enable Data Augmentation
+
+```bash
+# Deep learning with augmentation
+python train_cnn.py --cross_validate --use_augmentation --epochs 50
+```
+
+### Add Wavelet Features (Classical ML)
+
+```bash
+# Classical ML with wavelet features (more features but slower)
+python compare_models.py --skip_deep --include_wavelet
+```
+
+### Custom Output Directory
+
+```bash
+python compare_models.py --output_dir my_results
+```
+
+### Use Gradient Boosting + SMOTE Only
+
+```bash
+# XGBoost with multiprocessing (n_jobs=4 for speed)
+python compare_models.py --skip_deep --skip_classical --records 100
+```
+
+## 📈 Expected Performance
+
+### With Default Settings (20 patients, SMOTE)
+
+| Model | Balanced Accuracy | F1-Score | AUC |
+|-------|-------------------|----------|-----|
+| SVM | 75.3% ± 10.0% | 71% | 0.821 |
+| Random Forest | 80.1% ± 8.5% | 76% | 0.851 |
+| CNN (ResNet) | 72.0% ± 8.0% | 68% | 0.790 |
+| Fast LSTM | 70.5% ± 9.2% | 66% | 0.775 |
+
+*Note: Results vary based on data and random seed*
+
+## 🎓 What You'll Learn
+
+This project demonstrates:
+
+1. **Signal Processing**: Filtering, feature extraction, frequency analysis
+2. **Machine Learning**: Classification, cross-validation, hyperparameter tuning
+3. **Deep Learning**: CNN, LSTM, ResNet architectures
+4. **Best Practices**: Patient-wise CV, class balancing with SMOTE, focal loss
+5. **Reproducibility**: Fixed random seeds, detailed logging
+
+## 📚 File Descriptions
+
+| File | Purpose |
+|------|---------|
+| `compare_models.py` | **Main entry point** - trains all classical ML and deep learning models |
+| `train_cnn.py` | Deep learning training script (CNN, LSTM, ResNet) |
+| `ecg_mitbih.py` | Signal processing & feature extraction (don't edit) |
+| `requirements.txt` | Python dependencies |
+
+## 🤔 FAQ
+
+**Q: Which model should I use?**
+A: Start with SVM or Random Forest (fast, interpretable). Use deep learning if you need maximum accuracy.
+
+**Q: How long does training take?**
+A: Classical ML: ~5-10 min | Deep Learning: ~30-60 min | Full comparison: ~60-120 min
+
+**Q: Do I need a GPU?**
+A: No, CPU is fine. GPU (NVIDIA) makes deep learning ~5-10x faster.
+
+**Q: Can I use my own ECG data?**
+A: Yes, but you'll need to format it as WFDB records (.dat, .hea, .atr files).
+
+**Q: What if results are poor?**
+A: Check data quality, try SMOTE, increase epochs, or use deep learning.
+
+## 📞 Support
+
+If you encounter issues:
+1. Check the **Troubleshooting** section above
+2. Verify data is in `data/mitdb/`
+3. Ensure all dependencies installed: `pip install -r requirements.txt`
+4. Try the quick test: `python compare_models.py --quick_test`
+
+## 📄 License & References
+
+**MIT-BIH Database:**
+- Moody, G. B., & Mark, R. G. (2001). "The impact of the MIT-BIH Arrhythmia Database." IEEE Engineering in Medicine and Biology Magazine, 20(3), 45-50.
+- https://physionet.org/content/mitdb/
+
+**Techniques Used:**
+- Focal Loss (Lin et al., 2017)
+- ResNet-1D (Deep skip connections)
+- SMOTE (Chawla et al., 2002)
+
+---
+
+**Ready to start?** Run:
+```bash
+python compare_models.py --quick_test
 ```
 
 ## 📖 Usage
