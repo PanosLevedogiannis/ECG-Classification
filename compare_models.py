@@ -418,7 +418,7 @@ def run_classical_models(args, logger=None) -> Dict:
                     gamma=0.3,
                     random_state=42,
                     eval_metric='logloss',
-                    n_jobs=-1
+                    n_jobs=4                   # ✅ UPDATED: Use 4 cores explicitly (avoid thread contention)
                 ),
                 'loss_function': 'Log Loss (heavily regularized)'
             }
